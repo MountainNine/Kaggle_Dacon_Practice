@@ -55,8 +55,11 @@ def pre_processing(x, flag):
     columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '임대건물구분', '자격유형']
     target = "등록차량수"
     area_columns = []
+    lease_columns = []
+    lease_bojeung_columns = []
     for area in x['전용면적'].unique():
         area_columns.append(f'면적_{area}')
+        lease_columns.append(f'임대료_{area}')
 
     new_x = pd.DataFrame()
     for i, code in tqdm(enumerate(x['단지코드'].unique())):
@@ -69,6 +72,13 @@ def pre_processing(x, flag):
             area = float(col.split('_')[-1])
             new_x.loc[i, col] = temp[temp['전용면적'] == area]['전용면적별세대수'].sum()
 
+        for col in lease_columns:
+            area = float(col.split('_')[-1])
+            new_x.loc[i,col] = temp[temp['전용면적'] == area]['임대료'].mean()
+
+
+        new_x = new_x.fillna(0)
+
         if flag == True:
             new_x.loc[i, '등록차량수'] = temp.loc[0, '등록차량수']
 
@@ -79,8 +89,6 @@ def pre_processing(x, flag):
     return new_x
 
 
-def get_removed_code(x):
-    return x.drop('단지코드', axis=1)
 
 
 df = train
@@ -98,7 +106,7 @@ for c in differ_variables:
 x_train = new_train.iloc[:, 1:-1]
 y_train = new_train.iloc[:, -1]
 x_test = new_test.iloc[:, 1:]
-x_test['면적_65.0'] = 0
+x_test[['면적_65.0', '임대료_65.0']] = 0
 
 
 rfr = RandomForestRegressor(n_estimators=200, max_depth=25, min_samples_leaf=1,
@@ -113,7 +121,7 @@ def test():
     print(mean_absolute_error(test_y, pred))
 
 def cv_score():
-    cv_score = cross_val_score(model, train_X, train_y, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
+    cv_score = cross_val_score(model, x_train, y_train, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
     print(np.mean(cv_score * -1))
 
 def parameter_process():
@@ -124,14 +132,14 @@ def parameter_process():
         'min_samples_split': [4]
     }
     grid = GridSearchCV(rfr, param_grid=params, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
-    grid.fit(get_removed_code(train_X), get_removed_code(train_y))
+    # grid.fit(get_removed_code(train_X), get_removed_code(train_y))
 
 
 def get_result():
     model.fit(x_train, y_train)
     pred = model.predict(x_test)
     sample_submission['num'] = pred
-    sample_submission.to_csv('./result/result4_2.csv', index=False)
+    sample_submission.to_csv('./result/result4_3.csv', index=False)
 
 
 cv_score()
@@ -140,3 +148,4 @@ cv_score()
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
+# 146.2259646388408 145.924899079703
