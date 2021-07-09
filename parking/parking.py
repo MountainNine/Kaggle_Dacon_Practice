@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import RobustScaler
@@ -79,8 +79,6 @@ def pre_processing(x, flag):
     return new_x
 
 
-
-
 df = train
 differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F', '자격유형_O',
                     '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세']
@@ -114,6 +112,7 @@ def cv_score():
     cv_score = cross_val_score(model, train_X, train_y, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
     print(np.mean(cv_score * -1))
 
+
 def parameter_process():
     params = {
         'n_estimators': [200],
@@ -134,10 +133,10 @@ def get_result():
     sample_submission.to_csv('./result/result5_3.csv', index=False)
 
 
-parameter_process()
+cv_score()
 
 # test_x_unique
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
-# 146.2259646388408 145.924899079703
+# 125.91984994251257
