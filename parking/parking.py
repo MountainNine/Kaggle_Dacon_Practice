@@ -136,6 +136,8 @@ def get_result():
     sample_submission['num'] = pred
     sample_submission.to_csv('./result/result6_1.csv', index=False)
 
+def get_mae(x,pred):
+    print(mean_absolute_error(x['단지내주차면수'], pred))
 
 get_result()
 # test_x_unique
