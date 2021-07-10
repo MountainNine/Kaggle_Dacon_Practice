@@ -6,7 +6,7 @@ import warnings
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
-from xgboost import XGBRegressor
+from sklearn.preprocessing import RobustScaler
 from tqdm import tqdm
 
 from sklearn.linear_model import Ridge
@@ -32,7 +32,7 @@ test.columns = [
     '단지내주차면수'
 ]
 
-categorial_variable = ["지역", "공급유형", "자격유형"]
+categorial_variable = ["임대건물구분", "지역", "공급유형", "자격유형"]
 continious_variable = ["총세대수", "전용면적", "전용면적별세대수", "공가수", "임대보증금", "임대료",
                        "단지내주차면수"]
 target_variable = ["등록차량수"]
@@ -48,11 +48,11 @@ def pre_processing(x, flag):
     x[['임대료', '임대보증금']] = x[['임대료', '임대보증금']].astype('int64')
 
     x['전용면적'] = x['전용면적'] // 7 * 7
-    idx = x[x['전용면적'] > 100].index
-    x.loc[idx, '전용면적'] = 100
+    # idx = x[x['전용면적'] > 100].index
+    # x.loc[idx, '전용면적'] = 100
     # idx = x[x['전용면적'] < 15].index
     # x.loc[idx, '전용면적'] = 15
-    columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '자격유형']
+    columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '임대건물구분', '자격유형']
     target = "등록차량수"
     area_columns = []
     for area in x['전용면적'].unique():
@@ -69,21 +69,6 @@ def pre_processing(x, flag):
             area = float(col.split('_')[-1])
             new_x.loc[i, col] = temp[temp['전용면적'] == area]['전용면적별세대수'].sum()
 
-        new_x.loc[i, '임대건물구분_아파트'] = 1 if '아파트' in temp['임대건물구분'].values else 0
-        new_x.loc[i, '임대건물구분_상가'] = 1 if '상가' in temp['임대건물구분'].values else 0
-
-        if new_x.loc[i, '공급유형'] in ['공공임대(5년)', '공공분양', '공공임대(10년)', '공공임대(분납)']:
-            new_x.loc[i, '공급유형'] = '공공임대(5년/10년/분납/분양)'
-        elif new_x.loc[i, '공급유형'] in ['장기전세', '국민임대']:
-            new_x.loc[i, '공급유형'] = '장기전세/국민임대'
-
-        if new_x.loc[i, '자격유형'] in ['J', 'L', 'K', 'N', 'M', 'O']:
-            new_x.loc[i, '자격유형'] = '행복주택_공급대상'
-        elif new_x.loc[i, '자격유형'] in ['H', 'B', 'E', 'G']:
-            new_x.loc[i, '자격유형'] = '국민임대/장기전세_공급대상'
-        elif new_x.loc[i, '자격유형'] in ['C', 'I', 'F']:
-            new_x.loc[i, '자격유형'] = '영구임대_공급대상'
-
         if flag == True:
             new_x.loc[i, '등록차량수'] = temp.loc[0, '등록차량수']
 
@@ -95,7 +80,8 @@ def pre_processing(x, flag):
 
 
 df = train
-differ_variables = ['지역_서울특별시', '면적_63.0', '자격유형_D']
+differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F', '자격유형_O',
+                    '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세']
 
 if len(test[test['자격유형'].isnull() == True]) > 0:
     test.loc[test['자격유형'].isnull() == True, ['자격유형']] = ('A', 'C')
@@ -108,10 +94,10 @@ for c in differ_variables:
 x_train = new_train.iloc[:, 1:-1]
 y_train = new_train.iloc[:, -1]
 x_test = new_test.iloc[:, 1:]
+x_test['면적_63.0'] = 0
 
 rfr = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_leaf=1,
                             min_samples_split=4, random_state=46)
-xgb = XGBRegressor(n_estimators=200, learning_rate=0.06, max_depth=3, random_state=0)
 model = rfr
 train_X, test_X, train_y, test_y = train_test_split(x_train, y_train, test_size=0.2, random_state=93)
 
@@ -121,7 +107,6 @@ def test():
     pred = model.predict(test_X)
     print(mean_absolute_error(test_y, pred))
 
-
 def cv_score():
     cv_score = cross_val_score(model, x_train, y_train, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
     print(np.mean(cv_score * -1))
@@ -129,20 +114,13 @@ def cv_score():
 
 def parameter_process():
     params = {
-        'n_estimators': [125,150,175,200],
+        'n_estimators': [200],
         'max_depth': [15],
         'min_samples_leaf': [1],
         'min_samples_split': [4],
         'random_state': range(1, 100)
     }
-
-    param_xgb = {
-        'n_estimators': [200],
-        'max_depth': [3],
-        'learning_rate': [0.06],
-        # 'random_state': range(0, 100)
-    }
-    grid = GridSearchCV(model, param_grid=param_xgb, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
+    grid = GridSearchCV(rfr, param_grid=params, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
     grid.fit(x_train, y_train)
     print(grid.best_params_, grid.best_score_)
 
@@ -162,9 +140,9 @@ def get_result():
     sample_submission.to_csv('./result/result5_3.csv', index=False)
 
 
-mean_absolute_error(x_train['단지내주차면수'], y_train)
+cv_score()
 # test_x_unique
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
-# 143.2446382371954 -> 140.42300143479633
+# 125.65639359036557 125.02626989151149
