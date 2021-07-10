@@ -47,11 +47,11 @@ def pre_processing(x, flag):
     x.loc[x['임대보증금'] == '-', ['임대보증금']] = 0
     x[['임대료', '임대보증금']] = x[['임대료', '임대보증금']].astype('int64')
 
-    x['전용면적'] = x['전용면적'] // 5 * 5
-    idx = x[x['전용면적'] > 100].index
-    x.loc[idx, '전용면적'] = 100
-    idx = x[x['전용면적'] < 15].index
-    x.loc[idx, '전용면적'] = 15
+    x['전용면적'] = x['전용면적'] // 7 * 7
+    # idx = x[x['전용면적'] > 100].index
+    # x.loc[idx, '전용면적'] = 100
+    # idx = x[x['전용면적'] < 15].index
+    # x.loc[idx, '전용면적'] = 15
     columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '임대건물구분', '자격유형']
     target = "등록차량수"
     area_columns = []
@@ -96,7 +96,6 @@ y_train = new_train.iloc[:, -1]
 x_test = new_test.iloc[:, 1:]
 x_test['면적_65.0'] = 0
 
-
 rfr = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_leaf=1,
                             min_samples_split=4, random_state=46)
 model = rfr
@@ -119,11 +118,19 @@ def parameter_process():
         'max_depth': [15],
         'min_samples_leaf': [1],
         'min_samples_split': [4],
-        'random_state': range(1,100)
+        'random_state': range(1, 100)
     }
     grid = GridSearchCV(rfr, param_grid=params, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
     grid.fit(x_train, y_train)
     print(grid.best_params_, grid.best_score_)
+
+
+def feature_importance():
+    model.fit(x_train, y_train)
+    df = pd.DataFrame()
+    df['column'] = x_train.columns
+    df['coef'] = model.feature_importances_
+    print(df.sort_values('coef', ascending=False).head(10))
 
 
 def get_result():
@@ -134,9 +141,8 @@ def get_result():
 
 
 cv_score()
-
 # test_x_unique
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
-# 125.91984994251257
+# 125.65639359036557 125.02626989151149
