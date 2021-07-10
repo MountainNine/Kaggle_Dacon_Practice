@@ -1,16 +1,12 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
-from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score, KFold
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.preprocessing import RobustScaler
-from tqdm import tqdm
 
-from sklearn.linear_model import Ridge
-import sklearn
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 
@@ -48,10 +44,10 @@ def pre_processing(x, flag):
     x[['임대료', '임대보증금']] = x[['임대료', '임대보증금']].astype('int64')
 
     x['전용면적'] = x['전용면적'] // 7 * 7
-    # idx = x[x['전용면적'] > 100].index
-    # x.loc[idx, '전용면적'] = 100
-    # idx = x[x['전용면적'] < 15].index
-    # x.loc[idx, '전용면적'] = 15
+    idx = x[x['전용면적'] > 100].index
+    x.loc[idx, '전용면적'] = 100
+    idx = x[x['전용면적'] < 15].index
+    x.loc[idx, '전용면적'] = 15
     columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '임대건물구분', '자격유형']
     target = "등록차량수"
     area_columns = []
@@ -80,8 +76,9 @@ def pre_processing(x, flag):
 
 
 df = train
-differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F', '자격유형_O',
-                    '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세']
+differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F',
+                    '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세', '자격유형_D',
+                    '면적_63.0']
 
 if len(test[test['자격유형'].isnull() == True]) > 0:
     test.loc[test['자격유형'].isnull() == True, ['자격유형']] = ('A', 'C')
@@ -94,7 +91,6 @@ for c in differ_variables:
 x_train = new_train.iloc[:, 1:-1]
 y_train = new_train.iloc[:, -1]
 x_test = new_test.iloc[:, 1:]
-x_test['면적_63.0'] = 0
 
 rfr = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_leaf=1,
                             min_samples_split=4, random_state=46)
@@ -106,6 +102,7 @@ def test():
     model.fit(train_X, train_y)
     pred = model.predict(test_X)
     print(mean_absolute_error(test_y, pred))
+
 
 def cv_score():
     cv_score = cross_val_score(model, x_train, y_train, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
@@ -137,12 +134,12 @@ def get_result():
     model.fit(x_train, y_train)
     pred = model.predict(x_test)
     sample_submission['num'] = pred
-    sample_submission.to_csv('./result/result5_3.csv', index=False)
+    sample_submission.to_csv('./result/result6_1.csv', index=False)
 
 
-cv_score()
+get_result()
 # test_x_unique
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
-# 125.65639359036557 125.02626989151149
+# 144.17 143.65
