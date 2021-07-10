@@ -32,7 +32,7 @@ test.columns = [
     '단지내주차면수'
 ]
 
-categorial_variable = ["임대건물구분", "지역", "공급유형", "자격유형"]
+categorial_variable = ["지역", "공급유형", "자격유형"]
 continious_variable = ["총세대수", "전용면적", "전용면적별세대수", "공가수", "임대보증금", "임대료",
                        "단지내주차면수"]
 target_variable = ["등록차량수"]
@@ -52,7 +52,7 @@ def pre_processing(x, flag):
     # x.loc[idx, '전용면적'] = 100
     # idx = x[x['전용면적'] < 15].index
     # x.loc[idx, '전용면적'] = 15
-    columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '임대건물구분', '자격유형']
+    columns = ['단지코드', '총세대수', '공가수', '지역', '단지내주차면수', '지하철', '버스', '공급유형', '자격유형']
     target = "등록차량수"
     area_columns = []
     for area in x['전용면적'].unique():
@@ -68,6 +68,21 @@ def pre_processing(x, flag):
         for col in area_columns:
             area = float(col.split('_')[-1])
             new_x.loc[i, col] = temp[temp['전용면적'] == area]['전용면적별세대수'].sum()
+
+        new_x.loc[i, '임대건물구분_아파트'] = 1 if '아파트' in temp['임대건물구분'].values else 0
+        new_x.loc[i, '임대건물구분_상가'] = 1 if '상가' in temp['임대건물구분'].values else 0
+
+        if new_x.loc[i, '공급유형'] in ['공공임대(5년)', '공공분양', '공공임대(10년)', '공공임대(분납)']:
+            new_x.loc[i, '공급유형'] = '공공임대(5년/10년/분납/분양)'
+        elif new_x.loc[i, '공급유형'] in ['장기전세', '국민임대']:
+            new_x.loc[i, '공급유형'] = '장기전세/국민임대'
+
+        if new_x.loc[i, '자격유형'] in ['J', 'L', 'K', 'N', 'M', 'O']:
+            new_x.loc[i, '자격유형'] = '행복주택_공급대상'
+        elif new_x.loc[i, '자격유형'] in ['H', 'B', 'E', 'G']:
+            new_x.loc[i, '자격유형'] = '국민임대/장기전세_공급대상'
+        elif new_x.loc[i, '자격유형'] in ['C', 'I', 'F']:
+            new_x.loc[i, '자격유형'] = '영구임대_공급대상'
 
         if flag == True:
             new_x.loc[i, '등록차량수'] = temp.loc[0, '등록차량수']
@@ -107,8 +122,9 @@ def test():
     pred = model.predict(test_X)
     print(mean_absolute_error(test_y, pred))
 
+
 def cv_score():
-    cv_score = cross_val_score(model, train_X, train_y, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
+    cv_score = cross_val_score(model, x_train, y_train, scoring='neg_mean_absolute_error', cv=5, n_jobs=-1)
     print(np.mean(cv_score * -1))
 
 
@@ -145,4 +161,4 @@ cv_score()
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
 # {'max_depth': 12, 'min_samples_leaf': 8, 'min_samples_split': 16, 'n_estimators': 100} -62.07652539964124
-# 125.65639359036557 125.02626989151149
+# 143.2446382371954
