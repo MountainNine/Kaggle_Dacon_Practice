@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+from catboost import CatBoostRegressor
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
@@ -31,7 +32,6 @@ test.columns = [
 categorial_variable = ["임대건물구분", "지역", "공급유형", "자격유형"]
 continious_variable = ["총세대수", "전용면적", "전용면적별세대수", "공가수", "임대보증금", "임대료",
                        "단지내주차면수"]
-target_variable = ["등록차량수"]
 
 
 # 임대보증금, 임대료, 도보 10분거리 내 지하철역 수(환승노선 수 반영), 도보 10분거리 내 버스정류장 수
@@ -43,7 +43,7 @@ def pre_processing(x, flag):
     x.loc[x['임대보증금'] == '-', ['임대보증금']] = 0
     x[['임대료', '임대보증금']] = x[['임대료', '임대보증금']].astype('int64')
 
-    x['전용면적'] = x['전용면적'] // 7 * 7
+    x['전용면적'] = x['전용면적'] // 5 * 5
     idx = x[x['전용면적'] > 100].index
     x.loc[idx, '전용면적'] = 100
     idx = x[x['전용면적'] < 15].index
@@ -74,17 +74,16 @@ def pre_processing(x, flag):
     # x[continious_variable] = scaler.fit_transform(x[continious_variable])
     return new_x
 
-
-df = train
 differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F',
                     '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세', '자격유형_D',
-                    '면적_63.0']
+                    '면적_65.0']
 
 if len(test[test['자격유형'].isnull() == True]) > 0:
     test.loc[test['자격유형'].isnull() == True, ['자격유형']] = ('A', 'C')
 
 new_train = pre_processing(train, True)
 new_test = pre_processing(test, False)
+
 for c in differ_variables:
     new_test[c] = 0
 
@@ -94,8 +93,10 @@ x_test = new_test.iloc[:, 1:]
 
 rfr = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_leaf=1,
                             min_samples_split=4, random_state=46)
-model = rfr
+cbr = CatBoostRegressor(loss_function='MAE', random_state=75)
+model = cbr
 train_X, test_X, train_y, test_y = train_test_split(x_train, y_train, test_size=0.2, random_state=93)
+
 
 
 def test():
@@ -115,11 +116,17 @@ def parameter_process():
         'max_depth': [15],
         'min_samples_leaf': [1],
         'min_samples_split': [4],
+    }
+
+    cat_params = {
         'random_state': range(1, 100)
     }
-    grid = GridSearchCV(rfr, param_grid=params, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
+    grid = GridSearchCV(model, param_grid=cat_params, cv=5, scoring='neg_mean_absolute_error', n_jobs=-1)
     grid.fit(x_train, y_train)
+    pred = grid.predict(x_test)
+
     print(grid.best_params_, grid.best_score_)
+    print(mean_absolute_error(x_test['단지내주차면수'], pred))
 
 
 def feature_importance():
@@ -134,7 +141,7 @@ def get_result():
     model.fit(x_train, y_train)
     pred = model.predict(x_test)
     sample_submission['num'] = pred
-    sample_submission.to_csv('./result/result6_1.csv', index=False)
+    sample_submission.to_csv('./result/result6_3.csv', index=False)
 
 def get_mae(x,pred):
     print(mean_absolute_error(x['단지내주차면수'], pred))
