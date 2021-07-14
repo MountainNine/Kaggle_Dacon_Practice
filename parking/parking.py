@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
 from catboost import CatBoostRegressor
 from tqdm import tqdm
@@ -14,6 +14,17 @@ warnings.filterwarnings('ignore')
 train = pd.read_csv("./data/train.csv")
 test = pd.read_csv("./data/test.csv")
 sample_submission = pd.read_csv("./data/sample_submission.csv")
+age_gender_info = pd.read_csv("./data/age_gender_info.csv")
+age_gender_spec = pd.DataFrame(age_gender_info['지역'])
+population = pd.read_csv('./data/population.csv')
+population.columns = ['지역','인구수']
+age_gender_spec['2050'] = age_gender_info[['20대(남자)','20대(여자)','30대(남자)','30대(여자)',
+                                          '40대(남자)','40대(여자)', '50대(남자)', '50대(여자)']].sum(axis=1)
+age_gender_spec['5070'] = age_gender_info[['50대(남자)','50대(여자)',
+                                          '60대(남자)','60대(여자)','70대(남자)','70대(여자)']].sum(axis=1)
+age_gender_spec = age_gender_spec.merge(population, on='지역')
+# age_gender_spec['4050'] = age_gender_info[['40대(남자)','40대(여자)','50대(남자)','50대(여자)']].sum(axis=1)
+# age_gender_spec['6070'] = age_gender_info[['60대(남자)','60대(여자)','70대(남자)','70대(여자)']].sum(axis=1)
 plt.rc('font', family='NanumGothic')
 plt.rc('axes', unicode_minus=False)
 
@@ -34,7 +45,9 @@ continious_variable = ["총세대수", "전용면적", "전용면적별세대수
                        "단지내주차면수"]
 
 
-# 임대보증금, 임대료, 도보 10분거리 내 지하철역 수(환승노선 수 반영), 도보 10분거리 내 버스정류장 수
+def sorter(column):
+    test_index = pd.Categorical(column, categories=pd.unique(test['단지코드']), ordered=True)
+    return pd.Series(test_index)
 
 
 def pre_processing(x, flag):
@@ -68,11 +81,13 @@ def pre_processing(x, flag):
         if flag == True:
             new_x.loc[i, '등록차량수'] = temp.loc[0, '등록차량수']
 
+    new_x = new_x.merge(age_gender_spec[['지역', '2050']], on='지역', sort=False)
     new_x = pd.get_dummies(new_x, columns=categorial_variable)
     new_x = new_x[[c for c in new_x if c not in ['등록차량수']] + [c for c in ['등록차량수'] if c in new_x]]
     # scaler = RobustScaler()
     # x[continious_variable] = scaler.fit_transform(x[continious_variable])
     return new_x
+
 
 differ_variables = ['공급유형_공공임대(5년)', '공급유형_공공임대(10년)', '자격유형_B', '자격유형_F',
                     '지역_서울특별시', '공급유형_공공분양', '공급유형_장기전세', '자격유형_D',
@@ -84,6 +99,7 @@ if len(test[test['자격유형'].isnull() == True]) > 0:
 new_train = pre_processing(train, True)
 new_test = pre_processing(test, False)
 
+new_test = new_test.sort_values(by="단지코드", key=sorter)
 for c in differ_variables:
     new_test[c] = 0
 
@@ -93,7 +109,7 @@ x_test = new_test.iloc[:, 1:]
 
 rfr = RandomForestRegressor(n_estimators=200, max_depth=15, min_samples_leaf=1,
                             min_samples_split=4, random_state=46)
-cbr = CatBoostRegressor(loss_function='MAE', random_state=75)
+cbr = CatBoostRegressor(loss_function='MAE', random_state=44)
 model = cbr
 train_X, test_X, train_y, test_y = train_test_split(x_train, y_train, test_size=0.2, random_state=93)
 
@@ -141,12 +157,26 @@ def get_result():
     model.fit(x_train, y_train)
     pred = model.predict(x_test)
     sample_submission['num'] = pred
-    sample_submission.to_csv('./result/result6_3.csv', index=False)
+    sample_submission.to_csv('./result/result8_3.csv', index=False)
 
-def get_mae(x,pred):
-    print(mean_absolute_error(x['단지내주차면수'], pred))
+def draw_graph():
+    import matplotlib.pyplot as plt
 
-get_result()
+    best_score = pd.read_csv('./result/result8_2.csv')
+    danji_score = new_test['단지내주차면수'].reset_index(drop=True)
+    current_score = pd.read_csv('./result/result8_3.csv')
+    print(mean_absolute_error(best_score['num'], current_score['num']))
+
+    plt.figure(figsize=(18, 6))
+    plt.plot(best_score['code'], best_score['num'])
+    plt.plot(current_score['code'], current_score['num'])
+    plt.plot(best_score['code'], danji_score)
+    plt.show()
+
+    merge_score = best_score.merge(current_score, on='code')
+    merge_score['danji_score'] = danji_score
+    merge_score['sub_score'] = np.abs(merge_score['num_y'] - merge_score['danji_score'])
+
 # test_x_unique
 # gbr: 72.57647194273466
 # rfr: 19.73668358714044
